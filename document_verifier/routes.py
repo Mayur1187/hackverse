@@ -9,6 +9,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
 from .detection import detect_tampering, draw_highlights
+from .yolo_detection import resolve_yolo_model_source
 from .models import DetectionResult, Document, Explanation, ExtractedData, db
 from .ocr import extract_text, get_tesseract_version_status, load_image_for_processing
 from .reasoning import generate_explanation
@@ -33,7 +34,28 @@ def value_error(error):
 @bp.get("/health")
 def health():
     ocr_status, tesseract_version = get_tesseract_version_status()
-    return jsonify({"status": "ok", "ocr_status": ocr_status, "tesseract": tesseract_version})
+    yolo_ultralytics = False
+    try:
+        import ultralytics  # noqa: F401
+
+        yolo_ultralytics = True
+    except ImportError:
+        pass
+    yolo_model = (current_app.config.get("DOCUMENT_YOLO_MODEL") or "").strip()
+    yolo_resolved = resolve_yolo_model_source(yolo_model) if yolo_model else None
+    return jsonify(
+        {
+            "status": "ok",
+            "ocr_status": ocr_status,
+            "tesseract": tesseract_version,
+            "yolo": {
+                "ultralytics_installed": yolo_ultralytics,
+                "model_configured": bool(yolo_model),
+                "weights_usable": bool(yolo_resolved) if yolo_model else None,
+                "model": yolo_model if yolo_model else None,
+            },
+        }
+    )
 
 
 @bp.post("/upload")
@@ -110,10 +132,14 @@ def _save_and_process_file(file: FileStorage, source_type: str) -> Document:
     file.save(upload_path)
 
     display_path = load_image_for_processing(upload_path, Path(current_app.config["PROCESSED_DIR"]))
+    yolo_model = (current_app.config.get("DOCUMENT_YOLO_MODEL") or "").strip() or None
     issues = detect_tampering(
         display_path,
         current_app.config.get("DOCUMENT_TAMPER_MODEL_PATH"),
         current_app.config.get("DOCUMENT_TAMPER_MODEL_THRESHOLD", 0.65),
+        yolo_model=yolo_model,
+        yolo_conf=float(current_app.config.get("DOCUMENT_YOLO_CONF", 0.35)),
+        yolo_max_det=int(current_app.config.get("DOCUMENT_YOLO_MAX_DET", 32)),
     )
     highlighted_path = Path(current_app.config["PROCESSED_DIR"]) / f"{display_path.stem}_highlighted.png"
     draw_highlights(display_path, issues, highlighted_path)
@@ -200,6 +226,13 @@ def _present_issue(issue: dict) -> dict:
         "trained_model_tamper_signal": "The trained classifier marked the document-level pattern as suspicious.",
     }
     issue_type = issue.get("issue_type", "")
+    if issue_type.startswith("yolo_"):
+        label = issue_type[5:].replace("_", " ").strip() or "region"
+        names.setdefault(issue_type, f"YOLO: {label.title()}")
+        meanings.setdefault(
+            issue_type,
+            "A YOLO detector drew a box here. With document-trained weights, this often marks a field, forgery, or layout cue to verify.",
+        )
     issue["display_name"] = names.get(issue_type, issue_type.replace("_", " ").title())
     issue["review_meaning"] = meanings.get(issue_type, issue.get("details", "This area should be reviewed."))
     return issue

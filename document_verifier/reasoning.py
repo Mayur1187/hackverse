@@ -56,6 +56,17 @@ ISSUE_INTERPRETATIONS = {
 }
 
 
+def _interpretation_for_issue(issue_type: str) -> str:
+    if issue_type in ISSUE_INTERPRETATIONS:
+        return ISSUE_INTERPRETATIONS[issue_type]
+    if issue_type.startswith("yolo_"):
+        return (
+            "A YOLO detector localized this region. With weights trained on identity documents, tampered fields, "
+            "or layout elements, treat the box as a priority review zone; compare pixels and values to issuer records."
+        )
+    return "This area differs from nearby document content and should be manually reviewed."
+
+
 def generate_explanation(
     issue_dicts: list[dict],
     ocr_text: str = "",
@@ -116,10 +127,7 @@ def _rule_based_explanation(issue_dicts: list[dict]) -> tuple[str, str]:
                 "confidence": issue["confidence"],
                 "region": issue["box"],
                 "measurement": issue["details"],
-                "why_it_feels_suspicious": ISSUE_INTERPRETATIONS.get(
-                    issue_type,
-                    "This area differs from nearby document content and should be manually reviewed.",
-                ),
+                "why_it_feels_suspicious": _interpretation_for_issue(issue_type),
                 "specific_check": _specific_check_for_issue(issue_type),
             }
         )
@@ -238,6 +246,11 @@ def _build_review_guidance(counts: Counter) -> list[str]:
         guidance.append("Inspect whether softness is limited to important fields such as name, amount, date, ID number, or signature.")
     if counts.get("trained_model_tamper_signal"):
         guidance.append("Treat the trained-model signal as a document-level alert and use the highlighted CV regions to localize what to inspect.")
+    if any(k.startswith("yolo_") for k in counts):
+        guidance.append(
+            "For YOLO boxes, confirm what each class means in your trained model (for example MRZ, photo, stamp, "
+            "or tamper) and cross-check that zone against expected layout and authentic samples."
+        )
     guidance.append("Compare the suspicious fields with the original issuer record, payment record, or another copy of the same document.")
     return guidance
 
@@ -262,6 +275,9 @@ def _human_issue_name(issue_type: str) -> str:
         "localized_blur_anomaly": "Possible erased or softened field",
         "trained_model_tamper_signal": "AI tamper-classifier signal",
     }
+    if issue_type.startswith("yolo_"):
+        label = issue_type[5:].replace("_", " ").strip() or "region"
+        return f"YOLO-detected zone ({label})"
     return names.get(issue_type, issue_type.replace("_", " ").title())
 
 
@@ -272,6 +288,11 @@ def _specific_check_for_issue(issue_type: str) -> str:
         "localized_blur_anomaly": "Check whether an important value was blurred, cleaned, or rewritten while the rest of the page stayed sharp.",
         "trained_model_tamper_signal": "Review the document as a whole because the trained classifier considers its visual pattern suspicious.",
     }
+    if issue_type.startswith("yolo_"):
+        return (
+            "Validate the boxed region using your YOLO class definitions (field type, tamper, seal, etc.) and "
+            "compare pixels, fonts, and metadata with a trusted reference."
+        )
     return checks.get(issue_type, "Manually compare this area with the rest of the document and source records.")
 
 
