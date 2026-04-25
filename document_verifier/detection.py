@@ -150,7 +150,15 @@ def _merge_similar(issues: list[Issue]) -> list[Issue]:
     return sorted(merged, key=lambda i: i.confidence, reverse=True)
 
 
-def detect_tampering(image_path: Path, model_path: Path | None = None, model_threshold: float = 0.65) -> list[Issue]:
+def detect_tampering(
+    image_path: Path,
+    model_path: Path | None = None,
+    model_threshold: float = 0.65,
+    *,
+    yolo_model: str | None = None,
+    yolo_conf: float = 0.35,
+    yolo_max_det: int = 32,
+) -> list[Issue]:
     image = cv2.imread(str(image_path))
     if image is None:
         raise ValueError(f"Could not read image for detection: {image_path}")
@@ -161,13 +169,17 @@ def detect_tampering(image_path: Path, model_path: Path | None = None, model_thr
     issues.extend(detect_edge_inconsistency(gray))
     issues.extend(detect_noise_variance(gray))
     issues.extend(detect_blur_anomaly(gray))
-    if model_path is not None:
+    if model_path is not None and Path(model_path).exists():
         from .ml_model import detect_with_trained_model
 
         model_issue = detect_with_trained_model(image_path, model_path, model_threshold)
         if model_issue is not None:
             issues.append(model_issue)
-    return sorted(issues, key=lambda i: i.confidence, reverse=True)[:18]
+    if yolo_model:
+        from .yolo_detection import detect_with_yolo
+
+        issues.extend(detect_with_yolo(image_path, yolo_model, conf=yolo_conf, max_det=yolo_max_det))
+    return sorted(issues, key=lambda i: i.confidence, reverse=True)[:24]
 
 
 def draw_highlights(image_path: Path, issues: list[Issue], output_path: Path) -> Path:
@@ -179,9 +191,14 @@ def draw_highlights(image_path: Path, issues: list[Issue], output_path: Path) ->
         "edge_inconsistency": (0, 84, 255),
         "noise_variance_anomaly": (0, 180, 255),
         "localized_blur_anomaly": (255, 72, 72),
+        "trained_model_tamper_signal": (180, 0, 255),
     }
     for issue in issues:
-        color = palette.get(issue.issue_type, (0, 255, 0))
+        color = palette.get(issue.issue_type)
+        if color is None and issue.issue_type.startswith("yolo_"):
+            color = (0, 200, 130)
+        if color is None:
+            color = (0, 255, 0)
         x, y, w, h = issue.x, issue.y, issue.width, issue.height
         cv2.rectangle(image, (x, y), (x + w, y + h), color, 3)
         label = f"{issue.issue_type.replace('_', ' ')} {issue.confidence:.2f}"

@@ -31,6 +31,11 @@ class Config:
     DOCUMENT_TAMPER_MODEL_PATH = Path(os.getenv("DOCUMENT_TAMPER_MODEL_PATH", MODEL_DIR / "document_tamper_model.joblib"))
     DOCUMENT_TAMPER_MODEL_THRESHOLD = float(os.getenv("DOCUMENT_TAMPER_MODEL_THRESHOLD", "0.65"))
 
+    # YOLO (Ultralytics): set to a local .pt path or hub id (e.g. yolov8n.pt). Empty = disabled.
+    DOCUMENT_YOLO_MODEL = os.getenv("DOCUMENT_YOLO_MODEL", "").strip()
+    DOCUMENT_YOLO_CONF = float(os.getenv("DOCUMENT_YOLO_CONF", "0.35"))
+    DOCUMENT_YOLO_MAX_DET = int(os.getenv("DOCUMENT_YOLO_MAX_DET", "32"))
+
     SECRET_KEY = os.getenv("SECRET_KEY", "local-hackathon-secret")
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", f"sqlite:///{INSTANCE_DIR / 'verifier.sqlite3'}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

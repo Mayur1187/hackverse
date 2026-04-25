@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest==9.0.3
 scikit-learn==1.7.2
+ImageHash>=4.3.2
+-r requirements-yolo.txt
