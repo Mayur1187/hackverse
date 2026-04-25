@@ -1,0 +1,17 @@
+.env
+.vercel/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+.pytest_cache/
+.pytest_tmp/
+pytest-cache-files-*/
+tests/
+instance/
+storage/
+data/
+models/*.joblib
+*.joblib
+*.log
