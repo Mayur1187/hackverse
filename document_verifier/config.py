@@ -37,7 +37,17 @@ class Config:
     DOCUMENT_YOLO_MAX_DET = int(os.getenv("DOCUMENT_YOLO_MAX_DET", "32"))
 
     SECRET_KEY = os.getenv("SECRET_KEY", "local-hackathon-secret")
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", f"sqlite:///{INSTANCE_DIR / 'verifier.sqlite3'}")
+    @staticmethod
+    def _resolve_database_uri(default_uri: str) -> str:
+        database_url = os.getenv("DATABASE_URL", "").strip()
+        if not database_url:
+            return default_uri
+        # Some providers still emit postgres:// URLs, but SQLAlchemy expects postgresql://.
+        if database_url.startswith("postgres://"):
+            return database_url.replace("postgres://", "postgresql://", 1)
+        return database_url
+
+    SQLALCHEMY_DATABASE_URI = _resolve_database_uri.__func__(f"sqlite:///{INSTANCE_DIR / 'verifier.sqlite3'}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 20 * 1024 * 1024
 

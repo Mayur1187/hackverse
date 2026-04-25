@@ -128,6 +128,35 @@ Open:
 http://127.0.0.1:5000
 ```
 
+## Deploy To Railway
+
+This repository is now Railway-ready for Python deployment:
+
+- `Procfile` starts the app with Gunicorn using Railway's `$PORT`.
+- `requirements.txt` includes `gunicorn` for production serving.
+- `requirements.txt` includes `psycopg[binary]` for managed Postgres support.
+- `document_verifier/config.py` normalizes `postgres://...` to `postgresql://...` for SQLAlchemy compatibility.
+
+Deploy steps:
+
+1. Push this repo to GitHub.
+2. In Railway, create a new project from the GitHub repo.
+3. Add environment variables:
+
+```text
+SECRET_KEY=replace-with-a-long-random-value
+GROQ_API_KEY=your_groq_key_optional
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+4. Optional but recommended: add a Railway PostgreSQL service and set `DATABASE_URL` to that connection string.
+
+Important Railway notes:
+
+- If no `DATABASE_URL` is provided, the app falls back to SQLite.
+- Local storage on Railway containers is ephemeral. For persistent uploads/reports, use object storage.
+- OCR requires native Tesseract at runtime; without it, the app still runs and returns an OCR setup warning.
+
 ## Deploy To Vercel
 
 This repository is ready for Vercel's Python/Flask runtime:
